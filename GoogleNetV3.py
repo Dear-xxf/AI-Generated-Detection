@@ -6,19 +6,29 @@ from torch.utils.data import DataLoader
 
 
 class GoogleNetV3Classifier:
-    def __init__(self, dataset_dir, batch_size=32, learning_rate=0.001, num_epochs=10, device=None):
+    def __init__(self, dataset_dir, batch_size=16, learning_rate=0.001, num_epochs=30, device=None):
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.num_epochs = num_epochs
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device is None else device
 
-        self.transform = transforms.Compose([
+
+        self.train_transform = transforms.Compose([
             transforms.Resize((299, 299)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(10),
+            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
             transforms.ToTensor(),
-            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
 
-        self.train_loader, self.val_loader, self.test_loader = self.load_data(dataset_dir)
+        self.test_transform = transforms.Compose([
+            transforms.Resize((299, 299)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+        self.train_loader, self.test_loader = self.load_data(dataset_dir)
 
         self.model = self.build_model()
         self.model = self.model.to(self.device)
@@ -28,21 +38,21 @@ class GoogleNetV3Classifier:
 
     def load_data(self, dataset_dir):
         # AiArtData为0, RealArtData为1
-        dataset = datasets.ImageFolder(root=dataset_dir, transform=self.transform)
+        dataset = datasets.ImageFolder(root=dataset_dir, transform=None)
 
-        train_size = int(0.6 * len(dataset))
-        val_size = int(0.1 * len(dataset))
-        test_size = len(dataset) - train_size - val_size
+        train_size = int(0.8 * len(dataset))
+        test_size = len(dataset) - train_size
 
-        train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(
-            dataset, [train_size, val_size, test_size]
+        train_dataset, test_dataset = torch.utils.data.random_split(
+            dataset, [train_size, test_size]
         )
+        train_dataset.dataset.transform = self.train_transform
+        test_dataset.dataset.transform = self.test_transform
 
         train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
         test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False)
 
-        return train_loader, val_loader, test_loader
+        return train_loader, test_loader
 
     def build_model(self):
         # 加载预训练的Inception v3并修改最后一层
@@ -63,8 +73,9 @@ class GoogleNetV3Classifier:
             images, labels = images.to(self.device), labels.to(self.device).float()
 
             outputs = self.model(images)
-            outputs = outputs.view(-1)
-            loss = self.criterion(outputs, labels)
+            logits = outputs.logits
+            logits = logits.view(-1)
+            loss = self.criterion(logits, labels)
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -94,23 +105,23 @@ class GoogleNetV3Classifier:
         accuracy = 100 * correct / total
         print(f"Test Loss: {test_loss / len(self.test_loader)}, Test Accuracy: {accuracy:.2f}%")
 
-    def validate(self):
-        self.model.eval()
-        val_loss = 0.0
-        with torch.no_grad():
-            for inputs, labels in self.val_loader:
-                inputs, labels = inputs.to(self.device), labels.to(self.device).float().view(-1, 1)
-                outputs = self.model(inputs)
-                loss = self.criterion(outputs, labels)
-                val_loss += loss.item()
-
-        print(f"Validation Loss: {val_loss / len(self.val_loader)}")
+    # def validate(self):
+    #     self.model.eval()
+    #     val_loss = 0.0
+    #     with torch.no_grad():
+    #         for inputs, labels in self.val_loader:
+    #             inputs, labels = inputs.to(self.device), labels.to(self.device).float().view(-1, 1)
+    #             outputs = self.model(inputs)
+    #             loss = self.criterion(outputs, labels)
+    #             val_loss += loss.item()
+    #
+    #     print(f"Validation Loss: {val_loss / len(self.val_loader)}")
 
     def train(self):
         for epoch in range(self.num_epochs):
             print(f'Epoch {epoch+1}/{self.num_epochs}')
             self.train_one_epoch()
-            self.validate()
+            self.test()
 
     def save_model(self, path):
         torch.save(self.model.state_dict(), path)
