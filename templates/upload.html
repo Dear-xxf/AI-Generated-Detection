@@ -1,0 +1,135 @@
+<!doctype html>
+<html>
+<head>
+  <title>AI-image Detection</title>
+  <h1 class="tit">AI-image Detection</h1>
+</head>
+
+<body>
+  <div id="resultDiv"></div>
+  <div class="img" onclick="triggerFileInput()">
+    <img id="uploadedImage" style="display:none; max-width:100%; max-height:100%; cursor:pointer;" />
+    <input type="file" name="file" id="fileInput" onchange="uploadFile()" style="display:none;">
+    <span id="uploadText">Drag & drop the file here<br>or click here to upload file</span>
+  </div>
+<!--  <div id="subDiv" class="sub">-->
+<!--    <input type="submit" value="Upload" onclick="triggerFileInput()">-->
+<!--  </div>-->
+  <script>
+    function triggerFileInput() {
+      const input = document.getElementById('fileInput');
+      input.click();
+    }
+
+    function uploadFile() {
+      const input = document.getElementById('fileInput');
+      const file = input.files[0];
+      if (file) {
+        const reader = new FileReader();
+
+        // Preview the uploaded image
+        reader.onload = function (e) {
+          const imgElement = document.getElementById('uploadedImage');
+          const uploadText = document.getElementById('uploadText');
+          const subDiv = document.getElementById('subDiv');
+
+          imgElement.src = e.target.result; // Set the image source
+          imgElement.style.display = 'block'; // Show the image
+          uploadText.style.display = 'none'; // Hide the upload text
+          subDiv.style.display = 'none'; // Hide the upload button
+        };
+        reader.readAsDataURL(file);
+
+        // Prepare the file for upload
+        const formData = new FormData();
+        formData.append('file', file);
+
+        fetch('/upload/img', {
+          method: 'POST',
+          body: formData,
+        })
+          .then(response => response.json())
+          .then(data => {
+            console.log('Success:', data);
+            displayValue(data.value);
+          })
+          .catch((error) => {
+            console.error('Error:', error);
+          });
+      } else {
+        console.log('Please select a file.');
+      }
+    }
+
+    function displayValue(value) {
+      const resultDiv = document.getElementById('resultDiv');
+      if (resultDiv) {
+        const percentage = (value * 100).toFixed(2);
+        resultDiv.textContent = 'The probability that the image is a real image is ' + percentage + '%';
+      }
+    }
+  </script>
+</body>
+
+<style>
+  body {
+    background: #000;
+  }
+
+  .tit {
+    color: #DFB461;
+    font-size: 50px;
+    padding: 0;
+    margin-left: 100px;
+  }
+
+  .img {
+    width: 50%;
+    height: 500px;
+    background: #111111;
+    position: relative;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #aaa;
+    cursor: pointer;
+  }
+
+  .sub {
+    width: 50%;
+    height: 100px;
+    margin: 10px auto;
+    text-align: center;
+    line-height: 100px;
+    color: #aaa;
+    background: #111111;
+    position: relative;
+  }
+
+  input[type="file"] {
+    display: none; /* Hide the file input */
+  }
+
+  #resultDiv {
+    color: white;
+    width: 50%;
+    height: 50px;
+    margin: 10px auto;
+    text-align: center;
+    line-height: 100px;
+  }
+
+  #uploadedImage {
+    display: none;
+    max-width: 100%;
+    max-height: 100%;
+    cursor: pointer;
+  }
+
+  #uploadText {
+    color: #aaa;
+    text-align: center;
+  }
+</style>
+</html>
