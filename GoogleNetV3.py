@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision import models, transforms, datasets
 from torch.utils.data import DataLoader
+from PIL import Image
 
 
 class GoogleNetV3Classifier:
@@ -127,7 +128,25 @@ class GoogleNetV3Classifier:
         torch.save(self.model.state_dict(), path)
         print(f'Model saved to {path}')
 
+
     def load_model(self, path):
         self.model.load_state_dict(torch.load(path))
         self.model.eval()
         print(f'Model loaded from {path}')
+
+    def predict(self, image_path):
+        transform = transforms.Compose([
+            transforms.Resize((299, 299)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+        # 加载图片并预处理
+        image = Image.open(image_path).convert("RGB")
+        image_tensor = transform(image).unsqueeze(0).to(self.device)
+
+        # 预测
+        with torch.no_grad():
+            output = self.model(image_tensor)
+            prediction = output.item()  # 返回概率值
+        return prediction
